@@ -680,15 +680,26 @@ O backup contém investimentos, transações, histórico e configurações.
 Exportar JSON
 </button>
 
-<label class="btn">
+<button
+  type="button"
+  class="btn"
+  id="importButton"
+>
 Importar JSON
+</button>
+
 <input
   id="importFile"
   type="file"
   accept=".json,application/json"
-  hidden
+  style="display:none"
 >
-</label>
+
+<div
+  id="importStatus"
+  class="muted"
+  style="margin-top:12px"
+></div>
 
 </div>
 
@@ -2442,31 +2453,34 @@ function(){
     1000
   );
 };
+$("importFile").addEventListener(
+  "change",
+  async function(event){
 
+    const file =
+      event.target.files[0];
 
-$("importFile").onchange =
-function(event){
-
-  const file =
-    event.target.files[0];
-
-  if(!file) return;
-
-
-  const reader =
-    new FileReader();
-
-
-  reader.onload =
-  async ()=>{
+    if(!file){
+      alert("Nenhum ficheiro selecionado.");
+      return;
+    }
 
     try{
 
-      const backup =
-        JSON.parse(
-          reader.result
-        );
+      const text =
+        await file.text();
 
+      const backup =
+        JSON.parse(text);
+
+      if(
+        !backup ||
+        !Array.isArray(backup.assets)
+      ){
+        throw new Error(
+          "O ficheiro não contém uma carteira válida."
+        );
+      }
 
       const transaction =
         db.transaction(
@@ -2479,101 +2493,90 @@ function(event){
           "readwrite"
         );
 
+      const assetsStore =
+        transaction.objectStore("assets");
 
-      transaction
-        .objectStore("assets")
-        .clear();
+      const transactionsStore =
+        transaction.objectStore("transactions");
 
-      transaction
-        .objectStore("transactions")
-        .clear();
+      const historyStore =
+        transaction.objectStore("history");
 
-      transaction
-        .objectStore("history")
-        .clear();
+      const settingsStore =
+        transaction.objectStore("settings");
 
-      transaction
-        .objectStore("settings")
-        .clear();
+
+      assetsStore.clear();
+      transactionsStore.clear();
+      historyStore.clear();
+      settingsStore.clear();
+
+
+      for(const asset of backup.assets){
+        assetsStore.put(asset);
+      }
+
+      for(const tx of backup.transactions || []){
+        transactionsStore.put(tx);
+      }
+
+      for(const snapshot of backup.history || []){
+        historyStore.put(snapshot);
+      }
+
+      settingsStore.put({
+        key:"config",
+        value:
+          backup.settings ||
+          {
+            fund:0,
+            lowMediumTarget:60
+          }
+      });
 
 
       transaction.oncomplete =
-      async ()=>{
-
-        for(
-          const asset
-          of backup.assets || []
-        ){
-          await dbPut(
-            "assets",
-            asset
-          );
-        }
-
-
-        for(
-          const tx
-          of backup.transactions || []
-        ){
-          await dbPut(
-            "transactions",
-            tx
-          );
-        }
-
-
-        for(
-          const snapshot
-          of backup.history || []
-        ){
-          await dbPut(
-            "history",
-            snapshot
-          );
-        }
-
-
-        await dbPut(
-          "settings",
-          {
-            key:"config",
-            value:
-              backup.settings
-              ||
-              {
-                fund:0,
-                lowMediumTarget:60
-              }
-          }
-        );
-
+      async function(){
 
         await loadDatabase();
 
         showSaved();
 
         alert(
-          "Backup importado com sucesso."
+          "Importação concluída com sucesso.\n\n"
+          +
+          backup.assets.length
+          +
+          " investimentos importados."
+        );
+
+        event.target.value = "";
+      };
+
+
+      transaction.onerror =
+      function(){
+
+        alert(
+          "Erro ao gravar os dados na IndexedDB."
         );
 
       };
 
-    }catch(error){
+    }
+    catch(error){
 
       alert(
-        "JSON inválido: "
-        + error.message
+        "Erro ao importar JSON:\n\n"
+        +
+        error.message
       );
 
+      event.target.value = "";
     }
 
-  };
-
-
-  reader.readAsText(file);
-
-};
-
+  }
+);
 
 // --------------------------------------------------
 // Interface
