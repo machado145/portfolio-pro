@@ -2453,6 +2453,13 @@ function(){
     1000
   );
 };
+$("importButton").addEventListener(
+  "click",
+  function(){
+    $("importFile").value = "";
+    $("importFile").click();
+  }
+);  
 $("importFile").addEventListener(
   "change",
   async function(event){
