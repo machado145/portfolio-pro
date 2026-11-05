@@ -704,7 +704,44 @@ Importar JSON
   class="muted"
   style="margin-top:12px"
 ></div>
+<hr style="border:0;border-top:1px solid var(--line);margin:20px 0">
 
+<h3>Importar por texto</h3>
+
+<p class="muted">
+Alternativa recomendada para iPhone/iPad.
+Abre o ficheiro JSON, copia o conteúdo e cola aqui.
+</p>
+
+<textarea
+  id="jsonPaste"
+  class="input"
+  placeholder="Cola aqui o conteúdo completo do backup JSON..."
+  style="
+    width:100%;
+    min-height:180px;
+    resize:vertical;
+    font-family:monospace;
+  "
+></textarea>
+
+<div style="margin-top:10px">
+
+<button
+  type="button"
+  class="btn primary"
+  id="importPasteButton"
+>
+Importar JSON colado
+</button>
+
+</div>
+
+<div
+  id="pasteStatus"
+  class="muted"
+  style="margin-top:10px"
+></div>
 </div>
 
 </div>
@@ -2588,7 +2625,219 @@ $("importFile").addEventListener(
 
   }
 );
+$("importPasteButton").addEventListener(
+  "click",
+  async function(){
 
+    const status =
+      $("pasteStatus");
+
+    const text =
+      $("jsonPaste").value.trim();
+
+    if(!text){
+
+      alert(
+        "Cola primeiro o conteúdo do ficheiro JSON."
+      );
+
+      return;
+    }
+
+    try{
+
+      status.textContent =
+        "A validar JSON...";
+
+      status.className =
+        "muted";
+
+
+      const backup =
+        JSON.parse(text);
+
+
+      if(
+        !backup
+        ||
+        !Array.isArray(backup.assets)
+      ){
+
+        throw new Error(
+          "O conteúdo não contém uma carteira válida."
+        );
+
+      }
+
+
+      status.textContent =
+        backup.assets.length
+        +
+        " investimentos encontrados. A importar...";
+
+
+      await new Promise(
+        (resolve,reject)=>{
+
+          const transaction =
+            db.transaction(
+              [
+                "assets",
+                "transactions",
+                "history",
+                "settings"
+              ],
+              "readwrite"
+            );
+
+
+          transaction.oncomplete =
+            ()=>resolve();
+
+
+          transaction.onerror =
+            ()=>reject(
+              transaction.error
+            );
+
+
+          transaction.onabort =
+            ()=>reject(
+              transaction.error
+              ||
+              new Error(
+                "A importação foi cancelada."
+              )
+            );
+
+
+          const assets =
+            transaction.objectStore(
+              "assets"
+            );
+
+          const transactions =
+            transaction.objectStore(
+              "transactions"
+            );
+
+          const history =
+            transaction.objectStore(
+              "history"
+            );
+
+          const settings =
+            transaction.objectStore(
+              "settings"
+            );
+
+
+          assets.clear();
+          transactions.clear();
+          history.clear();
+          settings.clear();
+
+
+          for(
+            const asset
+            of backup.assets
+          ){
+
+            assets.put(asset);
+
+          }
+
+
+          for(
+            const tx
+            of backup.transactions || []
+          ){
+
+            transactions.put(tx);
+
+          }
+
+
+          for(
+            const snapshot
+            of backup.history || []
+          ){
+
+            history.put(snapshot);
+
+          }
+
+
+          settings.put({
+
+            key:"config",
+
+            value:
+              backup.settings
+              ||
+              {
+                fund:0,
+                lowMediumTarget:60
+              }
+
+          });
+
+        }
+      );
+
+
+      await loadDatabase();
+
+      showSaved();
+
+
+      status.textContent =
+        "✓ "
+        +
+        backup.assets.length
+        +
+        " investimentos importados com sucesso.";
+
+      status.className =
+        "positive";
+
+
+      $("jsonPaste").value = "";
+
+
+      alert(
+        "Importação concluída.\n\n"
+        +
+        backup.assets.length
+        +
+        " investimentos foram guardados na IndexedDB."
+      );
+
+    }
+
+    catch(error){
+
+      console.error(error);
+
+      status.textContent =
+        "Erro: "
+        +
+        error.message;
+
+      status.className =
+        "negative";
+
+
+      alert(
+        "Não foi possível importar o JSON.\n\n"
+        +
+        error.message
+      );
+
+    }
+
+  }
+);
 // --------------------------------------------------
 // Interface
 // --------------------------------------------------
