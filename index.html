@@ -687,12 +687,16 @@ Exportar JSON
 >
 Importar JSON
 </button>
-
 <input
   id="importFile"
   type="file"
-  accept=".json,application/json"
-  style="display:none"
+  style="
+    position:absolute;
+    width:1px;
+    height:1px;
+    opacity:0;
+    overflow:hidden;
+  "
 >
 
 <div
